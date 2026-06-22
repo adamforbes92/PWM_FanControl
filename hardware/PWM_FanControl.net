@@ -65,11 +65,11 @@ RMODE2 PWMEN  RSTN      0                     ; J_MODE pin2 releases reset
 * QLVL inverts the 555 output: 555 HIGH -> lvlout LOW -> TC4420 sinks GDRV -> P-FETs ON.
 RPU    VRAIL GDRV      4.7k                  ; pull gate to rail = OFF (fail-safe)
 RB1    O555 lvlb       1k                    ; base drive for QLVL input inverter
-QLVL   lvlout lvlb GND QNPN_MMBT3904        ; inverter: 555 high -> lvlout LOW -> TC4420 IN LOW
-RPDI   VRAIL lvlout    10k                   ; pull-up for QLVL collector / TC4420 IN
-* TC4420 (U_drv): IN=lvlout, OUT=GDRV, VDD=VRAIL, GND=GND
-* drvin LOW  -> TC4420 sinks GDRV to ~GND -> Vgs = GND-VRAIL = -12V -> P-FETs ON
-* drvin HIGH -> TC4420 drives GDRV to VRAIL -> Vgs = 0V -> P-FETs OFF (RPU holds too)
+QLVL   lvlout lvlb GND QNPN_MMBT3904        ; inverter: 555 high -> Q_lvl on -> lvlout pulled LOW
+RPDI   VRAIL lvlout    10k                   ; pull-up for QLVL collector / TC4420 IN node
+* TC4420 (U_drv): IN=lvlout (TC4420 IN), OUT=GDRV, VDD=VRAIL, GND=GND
+* lvlout LOW  -> TC4420 sinks GDRV to ~GND -> Vgs = GND-VRAIL = -12V -> P-FETs ON
+* lvlout HIGH -> TC4420 drives GDRV to VRAIL -> Vgs = 0V -> P-FETs OFF (RPU holds too)
 XDRV   lvlout GDRV VRAIL GND   TC4420       ; default gate driver (option B)
 * --- DNF alternates (discrete output totem pole; fit ONLY if NOT using XDRV/TC4420) ---
 *QP     GDRV ppb VRAIL  QPNP_MMBT3906       ; DNF: discrete push-pull source (alternate)
