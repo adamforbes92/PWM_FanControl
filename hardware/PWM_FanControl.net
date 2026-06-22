@@ -1,0 +1,111 @@
+* PWM_FanControl - SPICE-style netlist (EDA-neutral, source of truth)
+* 555 PWM high-side fan controller (MK4 Golf)
+* 12V automotive, 300W (~25A), high-side P-channel, heatsink-free
+* ---------------------------------------------------------------
+* This netlist documents every node/connection exactly. Use it to
+* recreate or verify the schematic in EasyEDA/KiCad if the native
+* JSON import needs cleanup.
+*
+* NODE GLOSSARY
+*   BATTP   raw battery +            VRAIL   protected +12V rail
+*   VCC     control/enable (J_EXT)   V555    regulated 555 supply
+*   GND     ground (star at 555)     PWM     PWM signal (J_EXT pin2)
+*   GATE    common gate of Q1..Q4    GDRV    TC4420 output / gate drive node
+*   O555    555 output (pin3)        RSTN    555 RESET (pin4)
+*   FANP    fan +                    FANN    fan - (=GND)
+*   FULLSP  full-speed select line   PWMEN   pwm-enable select line
+*   NA      after-fuse node          NB      after ideal-diode node
+*   THTR    555 THR/TRG node         DISC    555 discharge node
+*   lvlout  QLVL collector / TC4420 IN (inverted 555)
+*
+* === STAGE 1: INPUT PROTECTION + INRUSH ===
+F1     BATTP NA        FUSE_30A
+XID    NA NB GND       IDEAL_DIODE_LM74700   ; controller + Q_ID pass FET
+DTVS1  GND NB          TVS_5KP24A            ; load-dump clamp
+L1     NB VRAIL        2.2u                  ; load-dump series choke
+RNTC   NB VRAIL        2.5                   ; inrush NTC (SL22 2R5)
+SK1    NB VRAIL        RELAY_BYPASS          ; shorts NTC after ~200ms
+CIN    VRAIL GND       470u                  ; input bulk
+CIN2   VRAIL GND       1u                    ; input HF bypass
+*
+* === STAGE 2: 555 PWM OSCILLATOR (TLC555) ===
+RREG   VRAIL V555      470
+DZREG  GND V555        ZENER_12V             ; cathode->V555
+CBYP   V555 GND        100n                  ; at pin8
+XU1    V555 GND RSTN THTR THTR O555 DISC ctrl  TLC555
++      ; pin map: 8=VCC 1=GND 4=RST 6=THR 2=TRG 3=OUT 7=DISC 5=CTRL(ctrl)
+CCTRL  ctrl GND        100n                  ; pin5 noise bypass
+R1     V555 DISC       1k                    ; timing R
+CT     THTR GND        10n                   ; timing C (~25kHz)
+DA     DISC wA         D_1N4148              ; charge steering
+DB     wB THTR         D_1N4148              ; discharge steering
+RV1A   wA wiper        5k                    ; pot half A
+RV1B   wiper wB        5k                    ; pot half B (10k total)
+*
+* === STAGE 3: CONTROL LOGIC (external 3-wire + mode header) ===
+* J_EXT: 1=VCC 2=PWM 3=GND
+* JP_MAIN removed => strap VRAIL to VCC (permanently live). Modeled as RJP.
+RJP    VRAIL VCC       0                     ; JP_MAIN removed (0R strap)
+RPULL  VCC MODE        100k                  ; defines open state
+* J_MODE 3-pin: pin1=FULLSP, centre=GND, pin2=PWMEN
+* Ground pin1 (FULL SPEED): force gate low + hold 555 in reset (interlock)
+* Ground pin2 (PWM): release RSTN (R_pull pulls high) -> 555 runs
+QRST   RSTN rstb GND   QNPN_MMBT3904         ; collector=RSTN emitter=GND
+RB0    FULLSP rstb     10k                   ; full-speed drives RST low
+* NOTE: full-speed = FETs ON. For a P-FET, ON means GATE pulled BELOW VRAIL.
+*       Force-on is implemented by pulling GDRV/GATE low via QFON to GND:
+QFON   GATE ffb GND    QNPN_MMBT3904         ; collector=GATE emitter=GND (pull gate low=ON)
+RFON   FULLSP ffb      10k
+RMODE1 FULLSP MODE      0                     ; J_MODE pin1 node = MODE-derived
+RMODE2 PWMEN  RSTN      0                     ; J_MODE pin2 releases reset
+*
+* === STAGE 4: GATE DRIVE (TC4420 default — option B, high-side P-channel) ===
+* Option B: RPU pulls GDRV to VRAIL (P-FETs OFF, fail-safe).
+* TC4420 (non-inverting, VDD=VRAIL) sinks GDRV to GND for ON.
+* QLVL inverts the 555 output: 555 HIGH -> lvlout LOW -> TC4420 sinks GDRV -> P-FETs ON.
+RPU    VRAIL GDRV      4.7k                  ; pull gate to rail = OFF (fail-safe)
+RB1    O555 lvlb       1k                    ; base drive for QLVL input inverter
+QLVL   lvlout lvlb GND QNPN_MMBT3904        ; inverter: 555 high -> lvlout LOW -> TC4420 IN LOW
+RPDI   VRAIL lvlout    10k                   ; pull-up for QLVL collector / TC4420 IN
+* TC4420 (U_drv): IN=lvlout, OUT=GDRV, VDD=VRAIL, GND=GND
+* drvin LOW  -> TC4420 sinks GDRV to ~GND -> Vgs = GND-VRAIL = -12V -> P-FETs ON
+* drvin HIGH -> TC4420 drives GDRV to VRAIL -> Vgs = 0V -> P-FETs OFF (RPU holds too)
+XDRV   lvlout GDRV VRAIL GND   TC4420       ; default gate driver (option B)
+* --- DNF alternates (discrete output totem pole; fit ONLY if NOT using XDRV/TC4420) ---
+*QP     GDRV ppb VRAIL  QPNP_MMBT3906       ; DNF: discrete push-pull source (alternate)
+*QN     GDRV ppb GND    QNPN_MMBT3904       ; DNF: discrete push-pull sink (alternate)
+DZG    GATE VRAIL      ZENER_12V             ; Vgs clamp (cathode->VRAIL)
+RGS    GATE VRAIL      10k                   ; fail-safe OFF pulldown to source
+RG1    GDRV g1         4.7
+RG2    GDRV g2         4.7
+RG3    GDRV g3         4.7
+RG4    GDRV g4         4.7
+*
+* === STAGE 5: POWER SWITCH + FLYBACK + SNUBBER ===
+* P-channel: source=VRAIL, gate=g1..g4, drain=FANP
+M1     FANP g1 VRAIL VRAIL  PMOS_SIR464DP
+M2     FANP g2 VRAIL VRAIL  PMOS_SIR464DP
+M3     FANP g3 VRAIL VRAIL  PMOS_SIR464DP
+M4     FANP g4 VRAIL VRAIL  PMOS_SIR464DP
+CB1    VRAIL GND       2200u
+CB2    VRAIL GND       2200u
+CB3    VRAIL GND       2200u
+CB4    VRAIL GND       2200u
+RS     FANP sn         10                    ; snubber R
+CS     sn GND          100n                  ; snubber C
+DFLY   GND FANP        D_SK54                ; freewheel: anode=GND cathode=FANP
+DMOT   FANN FANP       D_SK54                ; motor-side flyback across fan
+* J_FAN: 1=FANP 2=FANN ; FANN tied to GND
+RFANN  FANN GND        0
+*
+* === SUBCIRCUIT / MODEL STUBS (fill from datasheets for simulation) ===
+* .model PMOS_SIR464DP PMOS (Vto=-2 Rd=3m ...)
+* .model D_SK54 D (...)
+* .model D_1N4148 D (...)
+* .subckt TLC555 VCC GND RST THR TRG OUT DISC CTRL ... .ends
+* .subckt IDEAL_DIODE_LM74700 IN OUT GND ... .ends
+* .subckt TC4420 IN OUT VDD GND ... .ends  ; 6A non-inverting gate driver
+* ---------------------------------------------------------------
+* PWM line behaviour: FULL SPEED -> PWM held at VCC (100%); PWM mode ->
+* ~25kHz signal. 555 pin1 permanently grounded; enable via RESET (pin4).
+.end

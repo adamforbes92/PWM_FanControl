@@ -1,0 +1,98 @@
+{
+  "editorVersion": "6.5.46",
+  "docType": "1",
+  "title": "PWM_FanControl",
+  "description": "555 PWM high-side fan controller (MK4 Golf) - 12V automotive, 300W/25A, heatsink-free 4x40V P-FET. TC4420 (U_drv) is the default gate driver (option B): R_pu holds gate at VRAIL for OFF (fail-safe), TC4420 sinks GDRV low for ON via Q_lvl input inverter. Discrete Q_p/Q_n totem pole is a DNF alternate. BEST-EFFORT auto-generated layout; verify nets against hardware/PWM_FanControl.net after import.",
+  "colors": {},
+  "schematics": [
+    {
+      "title": "PWM_FanControl",
+      "docType": "1",
+      "description": "Single-sheet schematic. Symbols placed by stage; nets defined by net-label name matching. Re-arrange/route as needed in EasyEDA.",
+      "BBox": { "x": 0, "y": 0, "width": 1600, "height": 1000 },
+      "canvas": "CA~1600~1000~#FFFFFF~yes~#CCCCCC~10~1600~1000~line~0.5~pixel~5~5",
+      "_comment_stage1": "=== STAGE 1: INPUT PROTECTION + INRUSH ===",
+      "components": [
+        { "ref": "F1",     "value": "30A",        "name": "Fuse",            "stage": 1, "net_pins": { "1": "BATTP", "2": "NA" } },
+        { "ref": "XID",    "value": "LM74700-Q1", "name": "IdealDiodeCtrl",  "stage": 1, "net_pins": { "IN": "NA", "OUT": "NB", "GND": "GND" } },
+        { "ref": "Q_ID",   "value": "N-FET 80V",  "name": "NMOS",            "stage": 1, "net_pins": { "D": "NA", "S": "NB", "G": "XID.GATE" } },
+        { "ref": "TVS1",   "value": "5KP24A",     "name": "TVS",             "stage": 1, "net_pins": { "1": "NB", "2": "GND" } },
+        { "ref": "L1",     "value": "2.2uH",      "name": "Inductor",        "stage": 1, "net_pins": { "1": "NB", "2": "VRAIL" } },
+        { "ref": "NTC1",   "value": "2R5/20A",    "name": "NTC",             "stage": 1, "net_pins": { "1": "NB", "2": "VRAIL" } },
+        { "ref": "K1",     "value": "Relay",      "name": "RelayBypass",     "stage": 1, "net_pins": { "A": "NB", "B": "VRAIL" } },
+        { "ref": "C_in",   "value": "470uF/35V",  "name": "CapElec",         "stage": 1, "net_pins": { "+": "VRAIL", "-": "GND" } },
+        { "ref": "C_in2",  "value": "1uF",        "name": "Cap",             "stage": 1, "net_pins": { "1": "VRAIL", "2": "GND" } },
+
+        { "_comment_stage2": "=== STAGE 2: 555 PWM (TLC555) ===" },
+        { "ref": "R_reg",  "value": "470",        "name": "Res",             "stage": 2, "net_pins": { "1": "VRAIL", "2": "V555" } },
+        { "ref": "Z_reg",  "value": "12V",        "name": "Zener",           "stage": 2, "net_pins": { "K": "V555", "A": "GND" } },
+        { "ref": "C_byp",  "value": "100nF",      "name": "Cap",             "stage": 2, "net_pins": { "1": "V555", "2": "GND" } },
+        { "ref": "U1",     "value": "TLC555",     "name": "IC_555",          "stage": 2, "net_pins": { "8_VCC": "V555", "1_GND": "GND", "4_RST": "RSTN", "6_THR": "THTR", "2_TRG": "THTR", "3_OUT": "O555", "7_DIS": "DISC", "5_CTL": "CTRL5" } },
+        { "ref": "C_ctrl", "value": "100nF",      "name": "Cap",             "stage": 2, "net_pins": { "1": "CTRL5", "2": "GND" } },
+        { "ref": "R1",     "value": "1k",         "name": "Res",             "stage": 2, "net_pins": { "1": "V555", "2": "DISC" } },
+        { "ref": "Ct",     "value": "10nF",       "name": "Cap",             "stage": 2, "net_pins": { "1": "THTR", "2": "GND" } },
+        { "ref": "Da",     "value": "1N4148",     "name": "Diode",           "stage": 2, "net_pins": { "A": "DISC", "K": "wA" } },
+        { "ref": "Db",     "value": "1N4148",     "name": "Diode",           "stage": 2, "net_pins": { "A": "wB", "K": "THTR" } },
+        { "ref": "RV1",    "value": "10k",        "name": "Pot",             "stage": 2, "net_pins": { "A": "wA", "W": "wiper", "B": "wB" } },
+
+        { "_comment_stage3": "=== STAGE 3: CONTROL LOGIC ===" },
+        { "ref": "J_EXT",  "value": "3p",         "name": "Header3",         "stage": 3, "net_pins": { "1_VCC": "VCC", "2_PWM": "PWM", "3_GND": "GND" } },
+        { "ref": "JP_MAIN","value": "2p",         "name": "Jumper",          "stage": 3, "net_pins": { "1": "VRAIL", "2": "VCC" }, "note": "Removed => VCC permanently live (strap)" },
+        { "ref": "R_pull", "value": "100k",       "name": "Res",             "stage": 3, "net_pins": { "1": "VCC", "2": "MODE" } },
+        { "ref": "J_MODE", "value": "3p",         "name": "Header3",         "stage": 3, "net_pins": { "1_FULLSPEED": "FULLSP", "2_GND": "GND", "3_PWM": "PWMEN" }, "note": "Option1: pin1=full speed, centre=GND, pin2=PWM" },
+        { "ref": "Q_rst",  "value": "MMBT3904",   "name": "NPN",             "stage": 3, "net_pins": { "C": "RSTN", "B": "rstb", "E": "GND" }, "note": "Interlock: full speed pulls RESET low" },
+        { "ref": "R_b0",   "value": "10k",        "name": "Res",             "stage": 3, "net_pins": { "1": "FULLSP", "2": "rstb" } },
+        { "ref": "Q_fon",  "value": "MMBT3904",   "name": "NPN",             "stage": 3, "net_pins": { "C": "GATE", "B": "ffb", "E": "GND" }, "note": "Force-on: pull P-FET gate low (FETs ON=full speed)" },
+        { "ref": "R_fon",  "value": "10k",        "name": "Res",             "stage": 3, "net_pins": { "1": "FULLSP", "2": "ffb" } },
+        { "ref": "R_m2",   "value": "0",          "name": "Res",             "stage": 3, "net_pins": { "1": "PWMEN", "2": "RSTN" }, "note": "pin2 grounded releases RESET" },
+
+        { "_comment_stage4": "=== STAGE 4: GATE DRIVE (push-pull) ===" },
+        { "ref": "R_pu",   "value": "4.7k",       "name": "Res",             "stage": 4, "net_pins": { "1": "VRAIL", "2": "GDRV" }, "note": "default gate->rail = OFF" },
+        { "ref": "R_b1",   "value": "1k",         "name": "Res",             "stage": 4, "net_pins": { "1": "O555", "2": "lvlb" }, "note": "DNF alternate — discrete totem pole; fit only if not using U_drv (TC4420)" },
+        { "ref": "Q_lvl",  "value": "MMBT3904",   "name": "NPN",             "stage": 4, "net_pins": { "C": "lvlout", "B": "lvlb", "E": "GND" }, "note": "Input inverter for TC4420: 555 high -> lvlout LOW -> TC4420 sinks GDRV -> P-FETs ON" },
+        { "ref": "R_pdi",  "value": "10k",        "name": "Res",             "stage": 4, "net_pins": { "1": "VRAIL", "2": "lvlout" }, "note": "Pull-up for QLVL collector / TC4420 IN" },
+        { "ref": "Q_p",    "value": "MMBT3906",   "name": "PNP",             "stage": 4, "net_pins": { "E": "VRAIL", "B": "ppb", "C": "GDRV" }, "note": "DNF alternate — discrete totem pole, fit only if not using U_drv (TC4420)" },
+        { "ref": "Q_n",    "value": "MMBT3904",   "name": "NPN",             "stage": 4, "net_pins": { "E": "GDRV", "B": "ppb", "C": "GND" }, "note": "DNF alternate — discrete totem pole, fit only if not using U_drv (TC4420)" },
+        { "ref": "U_drv",  "value": "TC4420",     "name": "GateDriver",      "stage": 4, "net_pins": { "IN": "lvlout", "OUT": "GDRV", "VDD": "VRAIL", "GND": "GND" }, "note": "Default gate driver (option B): IN=lvlout (inverted 555 via Q_lvl), OUT=GDRV, VDD=VRAIL. Sinks GDRV low for ON; R_pu pulls to VRAIL for OFF (fail-safe)" },
+        { "ref": "Z_g",    "value": "12V",        "name": "Zener",           "stage": 4, "net_pins": { "K": "VRAIL", "A": "GATE" }, "note": "Vgs clamp" },
+        { "ref": "R_gs",   "value": "10k",        "name": "Res",             "stage": 4, "net_pins": { "1": "GATE", "2": "VRAIL" }, "note": "fail-safe OFF" },
+        { "ref": "Rg1",    "value": "4.7",        "name": "Res",             "stage": 4, "net_pins": { "1": "GDRV", "2": "g1" } },
+        { "ref": "Rg2",    "value": "4.7",        "name": "Res",             "stage": 4, "net_pins": { "1": "GDRV", "2": "g2" } },
+        { "ref": "Rg3",    "value": "4.7",        "name": "Res",             "stage": 4, "net_pins": { "1": "GDRV", "2": "g3" } },
+        { "ref": "Rg4",    "value": "4.7",        "name": "Res",             "stage": 4, "net_pins": { "1": "GDRV", "2": "g4" } },
+
+        { "_comment_stage5": "=== STAGE 5: POWER SWITCH + FLYBACK + SNUBBER ===" },
+        { "ref": "Q1",     "value": "SiR464DP",   "name": "PMOS",            "stage": 5, "net_pins": { "S": "VRAIL", "G": "g1", "D": "FANP" } },
+        { "ref": "Q2",     "value": "SiR464DP",   "name": "PMOS",            "stage": 5, "net_pins": { "S": "VRAIL", "G": "g2", "D": "FANP" } },
+        { "ref": "Q3",     "value": "SiR464DP",   "name": "PMOS",            "stage": 5, "net_pins": { "S": "VRAIL", "G": "g3", "D": "FANP" } },
+        { "ref": "Q4",     "value": "SiR464DP",   "name": "PMOS",            "stage": 5, "net_pins": { "S": "VRAIL", "G": "g4", "D": "FANP" } },
+        { "ref": "C_b1",   "value": "2200uF/25V", "name": "CapElec",         "stage": 5, "net_pins": { "+": "VRAIL", "-": "GND" } },
+        { "ref": "C_b2",   "value": "2200uF/25V", "name": "CapElec",         "stage": 5, "net_pins": { "+": "VRAIL", "-": "GND" } },
+        { "ref": "C_b3",   "value": "2200uF/25V", "name": "CapElec",         "stage": 5, "net_pins": { "+": "VRAIL", "-": "GND" } },
+        { "ref": "C_b4",   "value": "2200uF/25V", "name": "CapElec",         "stage": 5, "net_pins": { "+": "VRAIL", "-": "GND" } },
+        { "ref": "Rs",     "value": "10",         "name": "Res",             "stage": 5, "net_pins": { "1": "FANP", "2": "sn" } },
+        { "ref": "Cs",     "value": "100nF",      "name": "Cap",             "stage": 5, "net_pins": { "1": "sn", "2": "GND" } },
+        { "ref": "D_fly",  "value": "SK54",       "name": "Schottky",        "stage": 5, "net_pins": { "A": "GND", "K": "FANP" }, "note": "freewheel" },
+        { "ref": "D_motor","value": "SK54",       "name": "Schottky",        "stage": 5, "net_pins": { "A": "FANN", "K": "FANP" }, "note": "motor-side flyback" },
+        { "ref": "J_FAN",  "value": "2p",         "name": "Header2",         "stage": 5, "net_pins": { "1_FANP": "FANP", "2_FANN": "FANN" } }
+      ],
+      "nets": [
+        "BATTP", "NA", "NB", "VRAIL", "VCC", "V555", "GND",
+        "PWM", "GATE", "GDRV", "O555", "RSTN", "MODE", "FULLSP", "PWMEN",
+        "THTR", "DISC", "CTRL5", "wA", "wB", "wiper",
+        "g1", "g2", "g3", "g4", "sn", "FANP", "FANN",
+        "rstb", "ffb", "lvlb", "lvlout", "ppb"
+      ]
+    }
+  ],
+  "import_instructions": {
+    "editor": "EasyEDA Std Edition",
+    "steps": [
+      "File -> Open -> Open from Local... and select this JSON.",
+      "This file uses a simplified component+net-label representation rather than full coordinate geometry, so symbols import as a placement list keyed by net name.",
+      "IMPORTANT: This is a BEST-EFFORT export and may not render as a fully routed sheet. Use hardware/PWM_FanControl.net (SPICE-style) and hardware/netlist.txt as the authoritative wiring reference.",
+      "After import, verify every connection against PWM_FanControl.net, place symbols per the 'stage' field, and connect by matching the 'net_pins' net names."
+    ],
+    "control_logic_summary": "Option 1: J_MODE pin1->GND = FULL SPEED (Q_fon pulls P-FET gate low => FETs ON => PWM line=VCC=100%; Q_rst holds 555 in RESET as interlock). J_MODE pin2->GND = PWM (RESET released, 555 runs ~25kHz). 555 pin1(GND) hardwired to GND at all times. Default gate driver: TC4420 (U_drv, option B) — Q_lvl inverts 555 output into TC4420 IN; TC4420 sinks GDRV low for ON; R_pu holds GDRV at VRAIL for OFF (fail-safe). Discrete Q_p/Q_n totem pole is DNF alternate only."
+  }
+}
