@@ -1,0 +1,106 @@
+PWM_FanControl - Human-readable netlist
+555 PWM high-side fan controller (MK4 Golf)
+12V automotive, 300W (~25A), high-side P-channel, heatsink-free
+=================================================================
+
+NETS
+----
+BATT+        Raw battery input (pre-protection)
+VRAIL        Protected +12V rail (post fuse/ideal-diode/inrush/choke)
+VCC          Control rail / PWM enable (J_EXT pin1; =battery via JP_MAIN)
+V555         Regulated ~12V supply to the 555 (via R_reg/Z_reg)
+GND          Ground (single point / star at 555)
+PWM          PWM signal (J_EXT pin2) -> gate-drive input
+GATE         Common gate node of Q1..Q4 (through Rg1..Rg4)
+GDRV         TC4420 output / gate drive node (TC4420 OUT sinks low for ON; R_pu pulls to VRAIL for OFF)
+CTRL_555OUT  555 output (pin3)
+RESET_N      555 RESET node (pin4) - enable
+MODE         Mode-select node from J_MODE
+FAN+         Fan positive (FET drains)
+FAN-         Fan negative (to GND)
+
+STAGE 1 - INPUT PROTECTION + INRUSH
+-----------------------------------
+F1.1   = BATT+ (from battery +)
+F1.2   = node A
+U_ID (LM74700-Q1): VIN=node A, drives Q_ID gate; GND=GND
+Q_ID:  source/drain in series A -> node B (reverse-battery pass)
+TVS1:  node B -> GND (5KP24A, load-dump clamp)
+L1.1   = node B ; L1.2 = VRAIL (series choke)
+NTC1.1 = node B ; NTC1.2 = VRAIL (inrush; in series)  [parallel with K1 contacts]
+K1 contacts: short NTC1.1<->NTC1.2 after ~200ms
+C_in:  VRAIL -> GND (470uF/35V)
+C_in2: VRAIL -> GND (1uF)
+
+STAGE 2 - 555 PWM OSCILLATOR (TLC555 U1)
+----------------------------------------
+R_reg.1 = VRAIL ; R_reg.2 = V555
+Z_reg:  V555 -> GND (12V zener, cathode to V555)
+C_byp:  V555 -> GND (100nF, at pin8)
+U1.pin8 (VCC)   = V555
+U1.pin1 (GND)   = GND        ** HARDWIRED - never switched **
+U1.pin4 (RESET) = RESET_N
+U1.pin5 (CTRL)  = via C_ctrl 100nF -> GND
+U1.pin3 (OUT)   = CTRL_555OUT
+U1.pin7 (DISCH) = junction of R1 / steering
+U1.pin6 (THR)   = Ct.1
+U1.pin2 (TRG)   = Ct.1
+Ct.1 = THR/TRG node ; Ct.2 = GND
+R1.1 = V555 ; R1.2 = U1.pin7 (DISCH)
+RV1 wiper network with Da/Db:
+  U1.pin7 -Da-> RV1 sideA -> wiper ; wiper -Db-> RV1 sideB -> THR/TRG
+  (diode steering: charge via Da half, discharge via Db half)
+
+STAGE 3 - CONTROL LOGIC (external + mode header)
+-----------------------------------------------
+J_EXT.1 = VCC
+J_EXT.2 = PWM
+J_EXT.3 = GND
+JP_MAIN: when REMOVED, strap VRAIL -> VCC (VCC permanently live)
+         when FITTED, VCC driven by host only
+R_pull.1 = VCC ; R_pull.2 = MODE (defines open state)
+MODE -> RESET_N path and -> full-speed path
+J_MODE (3-pin): pin1 = FULLSPEED line, centre = GND, pin2 = PWMEN line
+  Ground pin1 (FULL SPEED):
+     - pulls GDRV/GATE low via Q_force (FETs ON, PWM=VCC=100%)
+     - Q_rst drives RESET_N LOW (INTERLOCK: 555 held in reset)
+  Ground pin2 (PWM):
+     - releases RESET_N (pulled high by R_pull) -> 555 runs
+Q_rst (MMBT3904): base via R_b0 from FULLSPEED; collector=RESET_N; emitter=GND
+
+STAGE 4 - GATE DRIVE (TC4420 default — option B, high-side P-ch)
+-----------------------------------------------
+Option B: TC4420 (U_drv) is the primary/default gate driver.
+  R_pu.1 = VRAIL ; R_pu.2 = GDRV  (pull gate to rail = P-FETs OFF, fail-safe)
+  CTRL_555OUT -R_b1-> Q_lvl.base  (Q_lvl acts as input inverter for TC4420)
+  Q_lvl (MMBT3904): emitter=GND ; collector=lvlout (TC4420 IN)
+   555 HIGH -> Q_lvl ON -> lvlout LOW -> TC4420 sinks GDRV -> P-FETs ON
+   555 LOW  -> Q_lvl OFF -> lvlout HIGH (via R_pdi pull-up) -> TC4420 OUT HIGH -> P-FETs OFF
+  R_pdi (10k): VRAIL -> lvlout  (pull-up for Q_lvl collector / TC4420 IN)
+  U_drv (TC4420): IN=lvlout, OUT=GDRV, VDD=VRAIL, GND=GND
+   Non-inverting 6A driver; sinks GDRV to GND for ON; R_pu pulls to VRAIL for OFF.
+  --- DNF alternates (discrete totem pole; fit only if NOT using U_drv) ---
+  Q_p (MMBT3906): emitter=VRAIL ; base=ppb ; collector=GDRV   [DNF alternate]
+  Q_n (MMBT3904): collector=GDRV ; base=ppb ; emitter=GND     [DNF alternate]
+Z_g:  GATE -> VRAIL (12V zener, Vgs clamp)
+R_gs.1 = GATE ; R_gs.2 = VRAIL (10k fail-safe pulldown to source)
+Rg1.1=GDRV Rg1.2=Q1.gate ; Rg2.1=GDRV Rg2.2=Q2.gate
+Rg3.1=GDRV Rg3.2=Q3.gate ; Rg4.1=GDRV Rg4.2=Q4.gate
+
+STAGE 5 - POWER SWITCH + FLYBACK + SNUBBER
+------------------------------------------
+Q1..Q4 (SiR464DP P-ch): sources = VRAIL ; drains = FAN+ ; gates via Rg1..4
+C_bulk x4: VRAIL -> GND (2200uF/25V each)
+Rs.1 = FAN+ ; Rs.2 = Cs.1 ; Cs.2 = GND   (snubber across drain)
+D_fly: anode=GND, cathode=FAN+   (freewheel)
+J_FAN.1 = FAN+ ; J_FAN.2 = FAN-
+FAN- = GND
+D_motor: across J_FAN (cathode=FAN+, anode=FAN-)
+
+NOTES
+-----
+* PWM line (J_EXT.2) reflects the gate-drive demand; in FULL SPEED it is
+  held at VCC (100%). In PWM mode it carries the ~25kHz 555-derived signal.
+* 555 pin1 is permanently grounded; enable is via RESET (pin4).
+* Full-speed mode forces RESET low (interlock) so the oscillator cannot
+  contend with the forced-high gate line.

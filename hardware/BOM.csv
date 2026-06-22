@@ -1,0 +1,49 @@
+Ref,Qty,Value,Description,Suggested Part,Footprint,Notes
+F1,1,30A,Automotive blade fuse + holder,ATO 30A,Blade,Overcurrent/short protection
+U_ID,1,-,Ideal-diode controller (reverse battery),LM74700-Q1,SOT-23-6,Drives external N-FET
+Q_ID,1,-,N-channel MOSFET for ideal diode,IPB019N08N3 (or similar 80V logic),TO-263,Reverse-battery pass element
+TVS1,1,24V,Load-dump TVS (high power),5KP24A,DO-201,ISO 7637-2 clamp; keep rail <40V
+L1,1,1-4.7uH,Power inductor (load-dump ride-through),>=30A sat,Through-hole,Series choke
+C_in,1,470uF/35V,Input bulk electrolytic (low-ESR),Panasonic FR,Radial,Input filtering
+C_in2,1,1uF,Input ceramic,X7R 50V,1206,HF bypass
+C_bulk,4,2200uF/25V,Bulk electrolytic (low-ESR),Nichicon UPW/UHE,Radial,Supplies 25A switching pulses
+NTC1,1,2R5/20A,Inrush limiter,Ametherm SL22 2R5 20,Through-hole,Bypassed after ~200ms
+K1,1,-,Bypass relay (or MOSFET),12V automotive relay,-,Shorts NTC after inrush
+U1,1,-,CMOS 555 timer,TLC555,SOIC-8,PWM oscillator
+Z_reg,1,12V,Zener (555 rail regulation),BZX84C12,SOT-23,Stabilise Vcc to 555
+R_reg,1,470R,Series resistor for Z_reg,1/4W,0805,Feeds zener
+C_byp,1,100nF,555 Vcc bypass,X7R 50V,0805,At pin 8
+C_ctrl,1,100nF,555 CONTROL pin bypass,X7R 50V,0805,Pin 5 to GND
+RV1,1,10k,Duty-adjust trim pot,Bourns 3296,Through-hole,Sets duty 0-100%
+R1,1,1k,Timing resistor,1/4W,0805,Sets frequency with Ct
+Ct,1,10nF,Timing capacitor,C0G/NP0 50V,0805,~25kHz with R1
+Da,1,1N4148,Duty-steering diode (charge),1N4148W,SOD-123,Decouple duty from freq
+Db,1,1N4148,Duty-steering diode (discharge),1N4148W,SOD-123,Decouple duty from freq
+J_EXT,1,-,External 3-pin connector,JST/Molex 3p,-,VCC / PWM / GND
+JP_MAIN,1,-,Main jumper,2-pin header + shunt,2.54mm,Fitted=host VCC; removed=local live
+J_MODE,1,-,Mode select header,3-pin header,2.54mm,Pin1=full speed; centre=GND; pin2=PWM
+R_pull,1,100k,RESET/mode pull resistor,1/4W,0805,Defines open state
+Q_rst,1,-,RESET inverter / interlock NPN,MMBT3904,SOT-23,Couples full-speed to 555 RESET
+R_b0,1,10k,Base resistor for Q_rst,1/4W,0805,-
+Q_lvl,1,-,Level-shift NPN (input inverter for TC4420),MMBT3904,SOT-23,Required for default TC4420 config — inverts 555 output for TC4420 IN; DNF only if using discrete Q_p/Q_n totem pole
+R_b1,1,1k,Base resistor for Q_lvl,1/4W,0805,Required for default TC4420 config (drives Q_lvl base); DNF only if using discrete Q_p/Q_n totem pole
+R_pu,1,4.7k,Gate-node pull-up to VRAIL,1/4W,0805,Holds P-FET gate at rail for OFF (fail-safe); keep fitted always
+Q_p,1,-,Push-pull PNP (discrete alternate),MMBT3906,SOT-23,DNF alternate — discrete totem pole; fit only if NOT using U_drv (TC4420)
+Q_n,1,-,Push-pull NPN (discrete alternate),MMBT3904,SOT-23,DNF alternate — discrete totem pole; fit only if NOT using U_drv (TC4420)
+R_pdi,1,10k,Pull-up for QLVL collector / TC4420 IN,1/4W,0805,Required with Q_lvl; ensures defined HIGH at TC4420 IN when 555 is LOW
+U_drv,1,-,Gate driver (default),TC4420,SOIC-8,Primary driver — option B: sinks gate low for ON; R_pu pulls to rail for OFF
+Z_g,1,12V,Gate Zener clamp,BZX84C12,SOT-23,Vgs protection
+R_gs,1,10k,Gate-source pulldown,1/4W,0805,Fail-safe OFF
+Rg1,1,4.7R,Individual gate resistor Q1,1/4W,0805,Damp inter-FET oscillation
+Rg2,1,4.7R,Individual gate resistor Q2,1/4W,0805,Damp inter-FET oscillation
+Rg3,1,4.7R,Individual gate resistor Q3,1/4W,0805,Damp inter-FET oscillation
+Rg4,1,4.7R,Individual gate resistor Q4,1/4W,0805,Damp inter-FET oscillation
+Q1,1,P-ch 40V 3mohm,High-side power MOSFET,SiR464DP,PowerPAK-SO8,No heatsink (0.12W each)
+Q2,1,P-ch 40V 3mohm,High-side power MOSFET,SiR464DP,PowerPAK-SO8,Parallel
+Q3,1,P-ch 40V 3mohm,High-side power MOSFET,SiR464DP,PowerPAK-SO8,Parallel
+Q4,1,P-ch 40V 3mohm,High-side power MOSFET,SiR464DP,PowerPAK-SO8,Parallel
+Rs,1,10R,Snubber resistor,1W,2512,Damp Vds ringing
+Cs,1,100nF,Snubber capacitor,X7R 100V,1206,With Rs across drain
+D_fly,1,-,Flyback/freewheel Schottky,SK54 (or 30A SBR),DO-214/TO-220,Cathode->FAN+, anode->GND
+D_motor,1,-,Motor-side flyback diode,SK54,DO-214,Across fan terminals
+J_FAN,1,-,Fan output connector,2-pin,-,FAN+ / FAN-
