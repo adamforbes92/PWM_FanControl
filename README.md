@@ -13,10 +13,10 @@ Designed for **heatsink-free** operation using 4× parallel 40 V P-channel MOSFE
 | Supply | 12 V nominal (automotive, 9–16 V) |
 | Load | 300 W max (~25 A @ 12 V) |
 | Switch side | High-side (P-channel) |
-| Switch | 4× SiR464DP-class, 40 V, ~3 mΩ, DPAK (no heatsink) |
+| Switch | 4× SiR464DP-class, 40 V, ~3 mΩ, PowerPAK-SO8 (no heatsink) |
 | PWM source | TLC555 (CMOS 555), ~25 kHz |
 | Duty range | 0–100 % (diode-steered pot) |
-| Gate drive | Level-shift + push-pull totem pole |
+| Gate driver | **TC4420** (6 A) — sinks gate low for ON; `R_pu` pulls to rail for OFF |
 | Enable | 555 **RESET** (pin 4); chip GND (pin 1) permanently grounded |
 
 ## External 3-wire connector (J_EXT)
@@ -45,6 +45,17 @@ Designed for **heatsink-free** operation using 4× parallel 40 V P-channel MOSFE
 > **Option 1 mapping:** pin 1 = full speed, pin 2 = PWM.
 > The 555's ground (pin 1) is **hardwired to GND at all times** — the previous "remove jumper → 555 loses ground → output floats" failure cannot recur, because the header now switches a **RESET/enable** node, not the chip's ground.
 
+## Gate drive (TC4420, high-side P-channel — option B)
+
+The high-side P-FET gate must swing relative to the **+12 V rail**: ~rail for OFF, ~rail−10 V for ON.
+
+- **OFF (default / fail-safe):** `R_pu` (4.7 k) pulls the gate up to the rail, and `R_gs` (10 k) holds Vgs→0 if drive is lost → FETs OFF.
+- **ON:** the **TC4420** actively **sinks** the gate node low (through the per-FET gate resistors) to enrich Vgs and turn the P-FETs on.
+- A small **level-shift NPN** conditions the ground-referenced 555/RESET logic into the TC4420 input domain.
+- **Gate Zener (12 V)** clamps Vgs within the ±20 V rating.
+
+This replaces the earlier discrete push-pull totem pole (MMBT3904/3906) — those parts remain in the BOM as **DNF alternates** for anyone building without the driver IC.
+
 ## Protection summary
 
 | Feature | Implementation |
@@ -64,6 +75,7 @@ Designed for **heatsink-free** operation using 4× parallel 40 V P-channel MOSFE
 | File | Description |
 |---|---|
 | `hardware/PWM_FanControl.easyeda.json` | **EasyEDA-importable** schematic (File → Open → import this JSON) |
+| `hardware/PWM_FanControl.net` | SPICE-style netlist — **authoritative wiring reference** |
 | `hardware/netlist.txt` | Human-readable netlist (nets + connections) |
 | `hardware/BOM.csv` | Bill of materials |
 | `docs/DESIGN_NOTES.md` | Topology rationale, component math, thermal budget, cautions |
@@ -73,15 +85,15 @@ Designed for **heatsink-free** operation using 4× parallel 40 V P-channel MOSFE
 
 1. Open [EasyEDA Std Edition](https://easyeda.com/editor).
 2. **File → Open → Open from Local…** and select `hardware/PWM_FanControl.easyeda.json`.
-3. The schematic sheet loads with all symbols and nets.
-4. Review, assign footprints (suggested footprints are in the BOM), then route the PCB.
+3. The schematic loads as a component placement list keyed by net name.
+4. **Verify every connection against `hardware/PWM_FanControl.net`** (the source of truth), assign footprints (suggested in the BOM), then route the PCB.
 
-> The JSON targets EasyEDA Std (v6 schematic schema). If you use the Pro edition, use **File → Import → EasyEDA (Std)**.
+> The JSON is a **best-effort** export using a simplified component+net-label representation, not full coordinate geometry. It may not render as a fully routed sheet — treat it as a starting canvas and rely on the netlist for wiring.
 
 ## ⚠️ Disclaimer
 
 This is a **design aid / starting point**, not a verified production design. Before building:
 - Validate the load-dump strategy against your alternator (an unsuppressed load dump can exceed 40 V; 40 V FETs rely on the TVS clamping the rail).
 - Confirm fan stall/inrush current and size F1, the NTC and flyback diode accordingly.
-- Bench-test gate-drive edges for shoot-through before trusting the discrete totem pole; the TC4420 driver option is recommended for robustness.
+- Bench-test gate-drive edges before trusting the design.
 - Verify all parts against current datasheets and availability.
