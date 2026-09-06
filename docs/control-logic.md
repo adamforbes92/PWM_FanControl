@@ -1,63 +1,72 @@
-# Control logic — external interface & mode header
+# Control logic — jumper, trigger inputs & signal chain
 
-This document captures the **exact** control behaviour agreed for the MK4 Golf PWM fan controller.
+Net-level description of the control behaviour, verified against the schematic in `hardware/PWMFanController.epro`.
 
-## External 3-wire connector (J_EXT)
+## External interface
 
-| Pin | Net | Direction | Function |
+### Power pads
+
+| Pad | Net | Direction | Function |
 |---|---|---|---|
-| 1 | VCC | in | Control-rail supply and PWM enable (battery voltage, 9–16 V) |
-| 2 | PWM | out | PWM signal that drives the high-side gate stage |
-| 3 | GND | — | Ground return |
+| VCC | VCC | in | Supply: OEM "low speed" request (jumper fitted) or permanent battery (jumper removed) |
+| PWM | PWM_OUT | out | High-side switched output to fan + |
+| GND | GND | — | Ground return |
 
-## Main jumper (JP_MAIN)
+### EXT_CNTL (JST-XH, 2-pin) — trigger inputs, active when grounded
 
-The main jumper decides whether **VCC** comes from the host or is held permanently live on the board.
-
-| JP_MAIN | VCC source | Control authority |
+| Pin | Net | Grounded → |
 |---|---|---|
-| **Fitted** | Host system drives VCC | Host enables the board (VCC) and uses the PWM line |
-| **Removed** | Internal +12 V rail bridged onto VCC (permanently live) | Local `J_MODE` header selects the mode |
+| 1 | SHUTDOWN | SG3525 released from shutdown → PWM output runs (soft-started, pot-set duty) |
+| 2 | FULLSPEED | TC4420 input forced low via R6 (0 Ω) → gates driven → 100 % output |
 
-## Mode header (J_MODE) — 3-pin, Option 1
+### EXT_CNTL_JMP (2-pin header)
 
-`J_MODE` is a 3-pin header. The **centre pin is local GND**. You ground **one** outer pin to choose the mode (option (b): no neutral state — one outer pin is always grounded in standalone use).
+Shorts **SHUTDOWN → GND** when fitted. That is its only function.
 
-```
-   J_MODE
-   ┌───┬───┬───┐
-   │ 1 │ G │ 2 │      G = centre = local GND
-   └───┴───┴───┘
-     │       │
-  FULL      PWM
-  SPEED     MODE
-```
+## Truth table
 
-| Grounded pin | Mode | 555 state | Gate / PWM line | Fan |
+| EXT_CNTL_JMP | EXT_CNTL 1 (SHUTDOWN) | EXT_CNTL 2 (FULLSPEED) | SG3525 | Output |
 |---|---|---|---|---|
-| **pin 1 → GND** | **FULL SPEED** | Held in **RESET** (interlock — cannot oscillate) | Forced **on** (gate pulled to drive all FETs closed), PWM line = VCC (100 %) | Max |
-| **pin 2 → GND** | **PWM** | RESET **released** → oscillates ~25 kHz | Driven by 555 via gate stage | Variable (pot) |
+| Fitted | — | open | Running | PWM at pot duty, ~30 kHz, soft-started on power-up |
+| Removed | open | open | **Shutdown** (pin 10 pulled to 5.1 V by R2 10 k) | Off — gates held at rail |
+| Removed | grounded | open | Running | PWM at pot duty, soft-started |
+| Removed | open | grounded | Shutdown | **100 % on** (gate stage driven directly) |
+| Removed | grounded | grounded | Running | 100 % on (FULLSPEED dominates the shared node) |
 
-### Interlock (added per request)
+## Signal chain (net by net)
 
-When **pin 1 (full speed)** is grounded, the same signal **forces the 555 into RESET**. This guarantees the oscillator output cannot fight the forced-high gate line — no contention, no shoot-through risk from two sources driving the gate node.
+1. **SHUTDOWN** — SG3525 pin 10, pulled up to VREF (5.1 V) through **R2 10 k**, filtered by **C8 1 µF**. High = shutdown (outputs off, soft-start cap discharged). Grounding it (jumper or JST pin 1) lets the SG3525 run. Default state is therefore *off*.
+2. **WIPER / POT** — VREF (pin 16, internal 5.1 V regulator) feeds the **CALIBRATION** trimmer (3362P, 10 kΩ) across VREF–GND; the wiper drives the non-inverting error-amp input (pin 2). COMP (pin 9) is strapped to the inverting input (pin 1) → unity-gain follower → wiper voltage sets duty directly.
+3. **Oscillator** — RT (pin 6) = R4 10 k to GND; CT (pin 5) = C7 4.7 nF with the discharge pin (7) strapped across → f_osc ≈ 30 kHz.
+4. **Soft-start** — C9 100 µF on pin 8; internal ~50 µA source ramps duty over ~5 s each time shutdown is released.
+5. **OUTA / OUTB** (pins 11/14, each f/2) — diode-OR'd through **D3/D1** (1N4148WS) into a common node loaded by **R5 1 k** to GND, recombining into a single ~30 kHz PWM stream (**SG3525_OUT**, via **R1 1 k**; TP_SG3).
+6. **SG3525_OUT → Q4** (2N7002). Output high → Q4 on → **TC4420_IN** pulled low.
+7. **TC4420_IN** — pulled up to VCC by **R10 1 k (0.5 W)**; also tied to the **FULLSPEED** trigger through **R6 0 Ω**. Low = fan on. (TP_TC)
+8. **TC4420 (U2, non-inverting)** — input low → output (**GATE**) low → V_GS ≈ −VCC → Q1–Q3 conduct. Input high → GATE at rail → off. (TP_GATE)
+9. **GATE** — pulled to VCC by **R7 10 k** (fail-safe off), fanned out through **R8/R9/R11 10 Ω** to the three 120P03 gates.
+10. **PWM_OUT** — Q1–Q3 drains, **D4** (MBR60100DC) flyback to GND, and the green **PWM** LED via R12 10 k.
 
-### Why RESET instead of grounding pin 1 of the 555
+## Indicators
 
-The earlier revision grounded the **555's own ground pin (pin 1)** to gate operation. Removing that ground left the 555 with **no reference**, so its output floated to an undefined state (the bug you observed).
+| LED | Wiring | Meaning |
+|---|---|---|
+| FULL (red) | VCC → R3 10 k → LED → GND | VCC present (OEM request active / battery live) |
+| PWM (green) | PWM_OUT → R12 10 k → LED → GND | Output switching; brightness tracks duty |
 
-**This design fixes that:** the 555's **pin 1 is hardwired to GND permanently**. Enable/disable is done through **RESET (pin 4)**, which is the part's intended enable input:
-- RESET low (≤ ~0.7 V) → output forced low, oscillator stopped.
-- RESET high (released, pulled up) → 555 runs.
-
-The mode header therefore switches a **logic/RESET node**, never the chip's ground — so a floating-output condition is impossible.
-
-## Default / fail-safe states
+## Fail-safe states
 
 | Condition | Result |
 |---|---|
-| Gate drive lost (any reason) | `R_gs` 10 kΩ pulldown holds FETs **OFF** (fan off — fail-safe) |
-| `J_MODE` left open in standalone (neither pin grounded) | 555 RESET pulled to a defined level by `R_pull`; define this per your wiring (see note) |
-| Main jumper fitted, host VCC absent | Board unpowered → fan off |
+| No trigger grounded, jumper out | SG3525 in shutdown, Q4 off, TC4420_IN = VCC, GATE = VCC → **fan off** |
+| Gate drive lost (U2 failure/unpowered) | R7 10 k holds GATE at rail → fan off |
+| Level shifter lost (Q4 open) | R10 holds TC4420_IN high → fan off |
+| Trigger wiring severed | Input floats to its pull-up → fan off (SHUTDOWN) / PWM unaffected (FULLSPEED open) |
 
-> **Note on the open-header state:** with option (b) one outer pin is expected to be grounded in standalone use. If you want a *defined* state when neither is grounded, the pull network biases RESET to the **PWM-disabled (off)** condition by default; confirm if you'd prefer it to default to PWM-on instead.
+## ⚠ Trigger input voltage domains
+
+The two JST inputs are **not** equally protected:
+
+- **SHUTDOWN** idles at **5.1 V** (R2 to VREF). The SG3525 shutdown pin is not rated for 12 V — a floating/faulted ECU output imposing battery voltage can damage U1.
+- **FULLSPEED** connects through 0 Ω to TC4420_IN, which idles at **VCC (12–14 V)** via R10 and carries the full PWM waveform whenever the board is running. Anything attached to this pin must tolerate 12 V switching at ~30 kHz, and any external clamp below VCC will partially turn the FETs on.
+
+See `DESIGN_NOTES.md` → *Trigger input protection (proposal)* for the recommended fix before driving these pins from an ECU (the schematic already carries the note "Add zener to protect 12 V on triggers").
